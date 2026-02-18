@@ -1,5 +1,6 @@
 package com.intuit.karate.http;
 
+import com.intuit.karate.DIYCoverageTracker;
 import com.intuit.karate.Match;
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
@@ -7,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.AfterAll;
 
 /**
  *
@@ -69,6 +71,11 @@ class RequestHandlerTest {
                 .method("POST");
         handle();
         assertTrue(body.contains("<span>John</span>"));
+    }
+
+    @AfterAll
+    static void tearDownAll() {
+        DIYCoverageTracker.reportCoverage();
     }
 
 }
