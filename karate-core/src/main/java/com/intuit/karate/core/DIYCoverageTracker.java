@@ -2,6 +2,9 @@ package com.intuit.karate.core;
 
 import java.util.Arrays;
 
+/**
+ * Utility for flagging branch coverage and printing it.
+ */
 public class DIYCoverageTracker {
     public static boolean[] branches = new boolean[35];
 

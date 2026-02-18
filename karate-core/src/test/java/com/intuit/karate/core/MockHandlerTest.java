@@ -40,10 +40,12 @@ class MockHandlerTest {
         request = new HttpRequestBuilder(client).method("GET");
         return response;
     }
-
+    
+    /**
+     * This runs at the end to see the report of the DIY branch coverage tool
+     */
     @AfterAll
     static void tearDownAll() {
-        // As the last instruction 
         DIYCoverageTracker.reportCoverage();
     }
 
