@@ -74,105 +74,113 @@ class RequestHandlerTest {
     // ---------- Additional tests to improve branch coverage of handle() ----------
 
     /**
-     * Covers the branch where {@code stripHostContextPath} is not null and the request path starts with that prefix.
+     * R1: If the request path starts with the host context path, it should be stripped before handling.
      */
     @Test
-    void handle_testStripHostContextPathNotNull() {
-        ServerConfig config = new ServerConfig("test");
+    void shouldStripHostContextPath_WhenRequestPathStartsWithIt() {
+        ServerConfig config = new ServerConfig("classpath:demo");
         config.stripContextPathFromRequest(true);
-        config = config.hostContextPath("context");
+        config.hostContextPath("/context");
+        config.autoCreateSession(true); 
         handler = new RequestHandler(config);
-        request.path("context/path");
-        Response res = handle();
-        
-        assertNotNull(res);
+
+        HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/context/index").method("GET");
+        response = handler.handle(rb.build().toRequest());
+
+        assertEquals(200, response.getStatus());
+        matchHeaderEquals("Content-Type", "text/html");
+        assertTrue(response.getBodyAsString().startsWith("<!doctype html>"));
     }
     
     /**
-     * Covers the branch where {@code stripHostContextPath} is not null but the request path does not start with that prefix.
+     * R2: If the request path does not start with the context path, it should not be stripped.
      */
     @Test
-    void handle_testPathDoesNotStartWithHostContextPath() {
-        ServerConfig config = new ServerConfig("test");
+    void shouldNotStripHostContextPath_WhenRequestPathDoesNotStartWithIt() {
+        ServerConfig config = new ServerConfig("classpath:demo");
         config.stripContextPathFromRequest(true);
-        config = config.hostContextPath("context");
+        config.hostContextPath("/context");
+        config.autoCreateSession(true);
         handler = new RequestHandler(config);
-        request.path("path/context");
-        Response res = handle();
-        
-        assertNotNull(res);
+
+        HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/other/index").method("GET");
+        Response res = handler.handle(rb.build().toRequest());
+
+        assertNotEquals(200, res.getStatus()); // The server shouldn't be able to find the resource
     }
 
     /**
-     * Covers the branch where no session exists and {@code useGlobalSession} is enabled.
+     * R3: When global session is enabled, requests without a session should not be redirected.
      */
     @Test
-    void handle_testUseGlobalSessionTrue() {
-        ServerConfig config = new ServerConfig("test");
+    void shouldServeRequestWithoutRedirect_WhenGlobalSessionEnabled() {
+        ServerConfig config = new ServerConfig("classpath:demo");
         config.useGlobalSession(true);
+        config.autoCreateSession(false);
         handler = new RequestHandler(config);
-        request.path("path/context");
-        Response res = handle();
 
-        assertNotNull(res);
+        HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/index").method("GET");
+        Response res = handler.handle(rb.build().toRequest());
+
+        assertEquals(200, res.getStatus());
+        assertNull(res.getHeader("Location"));
+        assertTrue(res.getBodyAsString().startsWith("<!doctype html>"));
     }
 
     /**
-     * Covers the branch where no session exists, {@code autoCreateSession} is disabled, and the request path matches the sign-in path.
+     * R4: Requests to /signin without a session should not be redirected.
      */
     @Test
-    void handle_SigninPathEqualsRequestPath() {
-        ServerConfig config = new ServerConfig("test");
+    void shouldNotRedirect_WhenRequestIsSigninPage() {
+        ServerConfig config = new ServerConfig("classpath:demo");
         config.useGlobalSession(false);
         config.autoCreateSession(false);
         config.signinPagePath("/signin");
         config.signoutPagePath("/signout");
-
-        RequestHandler handler = new RequestHandler(config);
+        handler = new RequestHandler(config);
 
         HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/signin").method("GET");
         Response res = handler.handle(rb.build().toRequest());
 
-        assertNotNull(res);
+        assertNotEquals(302, res.getStatus());
     }
 
     /**
-     * Covers the branch where no session exists, {@code autoCreateSession} is disabled, and the request path matches the sign-out path.
+     * R5: Requests to /signout without a session should not be redirected.
      */
     @Test
-    void handle_SignoutPathEqualsRequestPath() {
-        ServerConfig config = new ServerConfig("test");
+    void shouldNotRedirect_WhenRequestIsSignoutPage() {
+        ServerConfig config = new ServerConfig("classpath:demo");
         config.useGlobalSession(false);
         config.autoCreateSession(false);
         config.signinPagePath("/signin");
         config.signoutPagePath("/signout");
-
-        RequestHandler handler = new RequestHandler(config);
+        handler = new RequestHandler(config);
 
         HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/signout").method("GET");
         Response res = handler.handle(rb.build().toRequest());
 
-        assertNotNull(res);
+        assertNotEquals(302, res.getStatus());
     }
 
     /**
-     * Covers the branch where no session exists, {@code autoCreateSession} is disabled, and the request path matches neither sign-in nor sign-out paths.
+     * R6: Requests to other pages without a session should be redirected to sign-in.
      */
     @Test
-    void handle_neitherSigninNorSignoutPathEqualsRequestPath() {
-        ServerConfig config = new ServerConfig("test");
+    void shouldRedirectToSignin_WhenRequestIsUnauthenticatedAndNotSigninOrSignout() {
+        ServerConfig config = new ServerConfig("classpath:demo");
         config.useGlobalSession(false);
         config.autoCreateSession(false);
-
         config.signinPagePath("/signin");
         config.signoutPagePath("/signout");
-
-        RequestHandler handler = new RequestHandler(config);
+        handler = new RequestHandler(config);
 
         HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/other").method("GET");
         Response res = handler.handle(rb.build().toRequest());
 
-        assertNotNull(res);
+        assertEquals(302, res.getStatus());
+        assertNotNull(res.getHeader("Location"));
+        assertTrue(res.getHeader("Location").contains("/signin"));
     }
 
 }

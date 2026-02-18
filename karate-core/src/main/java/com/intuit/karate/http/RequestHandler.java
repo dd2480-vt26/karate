@@ -54,6 +54,13 @@ public class RequestHandler implements ServerHandler {
         stripHostContextPath = config.isStripContextPathFromRequest() ? config.getHostContextPath() : null;
     }
 
+    // Examples of untested requirements:
+    // R1: If the request path starts with the context path, it should be stripped.
+    // R2: If the request path does not start with the context path, it should not be stripped.
+    // R3: When global session is enabled, requests without a session should not be redirected.
+    // R4: Requests to /signin without a session should not be redirected.
+    // R5: Requests to /signout without a session should not be redirected.
+    // R6: Requests to other pages without a session should be redirected to sign-in.
     @Override
     public Response handle(Request request) {
         if (stripHostContextPath != null) {
