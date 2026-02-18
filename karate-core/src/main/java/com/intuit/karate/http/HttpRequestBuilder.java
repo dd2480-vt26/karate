@@ -162,73 +162,93 @@ public class HttpRequestBuilder implements ProxyObject {
     }
 
     private void buildInternal() {
-        if (url == null) {
-            url = client.getConfig().getUrl();
-            if (url == null) {
-                throw new RuntimeException("incomplete http request, 'url' not set");
-            }
+        resolveUrl();
+        resolveMethod();
+        convertGetFormFields();
+        prepareMultipartBody();
+        applyCookiesHeader();
+        inferContentType();
+    }
+
+    private void resolveUrl() {
+        if (url != null) {
+            return;
         }
+        url = client.getConfig().getUrl();
+        if (url == null) {
+            throw new RuntimeException("incomplete http request, 'url' not set");
+        }
+    }
+
+    private void resolveMethod() {
         if (method == null) {
-            if (multiPart != null && multiPart.isMultipart()) {
-                method = "POST";
-            } else {
-                method = "GET";
-            }
+            method = multiPart != null && multiPart.isMultipart() ? "POST" : "GET";
         }
         method = method.toUpperCase();
-        if ("GET".equals(method) && multiPart != null) {
-            Map<String, Object> parts = multiPart.getFormFields();
-            if (parts != null) {
-                parts.forEach((k, v) -> param(k, (String) v));
-            }
-            multiPart = null;
+    }
+
+    private void convertGetFormFields() {
+        if (!"GET".equals(method) || multiPart == null) {
+            return;
         }
-        if (multiPart != null) {
-            if (body == null) { // this is not-null only for a re-try, don't rebuild multi-part
-                body = multiPart.build();
-                String userContentType = getHeader(HttpConstants.HDR_CONTENT_TYPE);
-                if (userContentType != null) {
-                    String boundary = multiPart.getBoundary();
-                    if (boundary != null) {
-                        contentType(userContentType + "; boundary=" + boundary);
-                    }
-                } else {
-                    contentType(multiPart.getContentTypeHeader());
+        Map<String, Object> parts = multiPart.getFormFields();
+        if (parts != null) {
+            parts.forEach((k, v) -> param(k, (String) v));
+        }
+        multiPart = null;
+    }
+
+    private void prepareMultipartBody() {
+        if (multiPart == null || body != null) {
+            return;
+        }
+        body = multiPart.build();
+        String userContentType = getHeader(HttpConstants.HDR_CONTENT_TYPE);
+        if (userContentType != null) {
+            String boundary = multiPart.getBoundary();
+            if (boundary != null) {
+                contentType(userContentType + "; boundary=" + boundary);
+            }
+        } else {
+            contentType(multiPart.getContentTypeHeader());
+        }
+    }
+
+    private void applyCookiesHeader() {
+        if (cookies == null || cookies.isEmpty()) {
+            return;
+        }
+        List<String> cookieValues = new ArrayList<>(cookies.size());
+        for (Cookie cookie : cookies) {
+            cookieValues.add(ClientCookieEncoder.LAX.encode(cookie));
+        }
+        header(HttpConstants.HDR_COOKIE, StringUtils.join(cookieValues, "; "));
+    }
+
+    private void inferContentType() {
+        if (body == null || multiPart != null) {
+            return;
+        }
+        String contentType = getContentType();
+        if (contentType == null) {
+            ResourceType rt = ResourceType.fromObject(body);
+            if (rt != null) {
+                contentType = rt.contentType;
+            }
+        }
+        Charset charset = contentType == null ? null : HttpUtils.parseContentTypeCharset(contentType);
+        if (charset == null) {
+            // client can be null when not in karate scenario, and mock clients can have nulls
+            charset = client == null ? null : client.getConfig() == null ? null : client.getConfig().getCharset();
+            if (charset != null) {
+                // edge case, support setting content type to an empty string
+                contentType = StringUtils.trimToNull(contentType);
+                if (contentType != null) {
+                    contentType = contentType + "; charset=" + charset;
                 }
             }
         }
-        if (cookies != null && !cookies.isEmpty()) {
-            List<String> cookieValues = new ArrayList<>(cookies.size());
-            for (Cookie c : cookies) {
-                String cookieValue = ClientCookieEncoder.LAX.encode(c);
-                cookieValues.add(cookieValue);
-            }
-            header(HttpConstants.HDR_COOKIE, StringUtils.join(cookieValues, "; "));
-        }
-        if (body != null) {
-            if (multiPart == null) {
-                String contentType = getContentType();
-                if (contentType == null) {
-                    ResourceType rt = ResourceType.fromObject(body);
-                    if (rt != null) {
-                        contentType = rt.contentType;
-                    }
-                }
-                Charset charset = contentType == null ? null : HttpUtils.parseContentTypeCharset(contentType);
-                if (charset == null) {
-                    // client can be null when not in karate scenario, and mock clients can have nulls
-                    charset = client == null ? null : client.getConfig() == null ? null : client.getConfig().getCharset();
-                    if (charset != null) {
-                        // edge case, support setting content type to an empty string
-                        contentType = StringUtils.trimToNull(contentType);
-                        if (contentType != null) {
-                            contentType = contentType + "; charset=" + charset;
-                        }
-                    }
-                }
-                contentType(contentType);
-            }
-        }
+        contentType(contentType);
     }
 
     public Response invoke() {
