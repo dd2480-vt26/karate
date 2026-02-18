@@ -56,65 +56,66 @@ public class RequestHandler implements ServerHandler {
 
     @Override
     public Response handle(Request request) {
-        if (stripHostContextPath != null) {
-            if (request.getPath().startsWith(stripHostContextPath)) {
+        // CC = 1
+        if (stripHostContextPath != null) { // CC = 2
+            if (request.getPath().startsWith(stripHostContextPath)) { // CC = 3
                 request.setPath(request.getPath().substring(stripHostContextPath.length()));
             }
         }
-        if (SLASH.equals(request.getPath())) {
+        if (SLASH.equals(request.getPath())) { // CC = 4
             request.setPath(config.getHomePagePath());
         }
         ServerContext context = contextFactory.apply(request);
-        if (request.getResourceType() == null) { // can be set by context factory
+        if (request.getResourceType() == null) { // CC = 5
             request.setResourceType(ResourceType.fromFileExtension(request.getPath()));
         }
-        if (!context.isApi() && request.isHttpGetForStaticResource() && context.isHttpGetAllowed()) {
-            if (request.getResourcePath() == null) { // can be set by context factory
-                request.setResourcePath(request.getPath()); // static resource
+        if (!context.isApi() && request.isHttpGetForStaticResource() && context.isHttpGetAllowed()) { // CC = 5 + 3 = 8
+            if (request.getResourcePath() == null) { // CC = 9
+                request.setResourcePath(request.getPath()); 
             }
             try {
-                return response().buildStatic(request);
+                return response().buildStatic(request); 
             } finally {
-                if (logger.isDebugEnabled()) {
+                if (logger.isDebugEnabled()) { // CC = 10
                     logger.debug("{} {} [{} ms]", request, 200, System.currentTimeMillis() - request.getStartTime());
                 }
             }
         }
-        Session session = context.getSession(); // can be pre-resolved by context-factory
-        if (session == null && !context.isStateless()) {
+        Session session = context.getSession(); 
+        if (session == null && !context.isStateless()) { // CC = 10 + 2 = 12
             String sessionId = context.getSessionCookieValue();
-            if (sessionId != null) {
+            if (sessionId != null) { // CC = 13
                 session = sessionStore.get(sessionId);
-                if (session != null && isExpired(session)) {
+                if (session != null && isExpired(session)) { // CC = 13 + 2 = 15
                     logger.debug("session expired: {}", session);
                     sessionStore.delete(sessionId);
                     session = null;
                 }
             }
-            if (session == null) {
-                if (config.isUseGlobalSession()) {
+            if (session == null) { // CC = 16
+                if (config.isUseGlobalSession()) { // CC = 17
                     session = ServerConfig.GLOBAL_SESSION;
                 } else {
-                    if (config.isAutoCreateSession()) {
+                    if (config.isAutoCreateSession()) { // CC = 18
                         context.init();
                         session = context.getSession();
                         logger.debug("auto-created session: {} - {}", request, session);
                     } else if (config.getSigninPagePath().equals(request.getPath())
-                            || config.getSignoutPagePath().equals(request.getPath())) {
+                            || config.getSignoutPagePath().equals(request.getPath())) { // CC = 18 + 2 = 20
                         session = Session.TEMPORARY;
                         logger.debug("auth flow: {}", request);
                     } else {
                         logger.warn("session not found: {}", request);
                         ResponseBuilder rb = response();
-                        if (sessionId != null) {
+                        if (sessionId != null) { // CC = 21
                             rb.deleteSessionCookie(sessionId);
                         }
-                        if (request.isAjax()) {
+                        if (request.isAjax()) { // CC = 22
                             rb.ajaxRedirect(signInPath());
                         } else {
                             rb.locationHeader(signInPath());
                         }
-                        return rb.buildWithStatus(302);
+                        return rb.buildWithStatus(302); 
                     }
                 }
             }
@@ -122,6 +123,8 @@ public class RequestHandler implements ServerHandler {
         }
         RequestCycle rc = RequestCycle.init(templateEngine, context);
         return rc.handle();
+
+        // CC = 22
     }
 
     private String signInPath() {
