@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.AfterAll; // To make sure it runs after the tests
 
 /**
  *
@@ -38,6 +39,12 @@ class MockHandlerTest {
         response = handler.handle(request.build().toRequest());
         request = new HttpRequestBuilder(client).method("GET");
         return response;
+    }
+
+    @AfterAll
+    static void tearDownAll() {
+        // As the last instruction 
+        DIYCoverageTracker.reportCoverage();
     }
 
     @Test
