@@ -54,23 +54,54 @@ public class RequestHandler implements ServerHandler {
         stripHostContextPath = config.isStripContextPathFromRequest() ? config.getHostContextPath() : null;
     }
 
-    @Override
-    public Response handle(Request request) {
+    // ---------- Refactoring of handle() ----------
+
+    /**
+     * Strips the context path from the beginning of the request path.
+     *
+     * @param request the incoming request
+     */
+    private void stripContextPath(Request request) {
         if (stripHostContextPath != null) {
             if (request.getPath().startsWith(stripHostContextPath)) {
                 request.setPath(request.getPath().substring(stripHostContextPath.length()));
             }
         }
+    }
+
+    /**
+     * Resolves the home page path for requests to "/".
+     *
+     * @param request the incoming request
+     */
+    private void resolveHomePage(Request request) {
         if (SLASH.equals(request.getPath())) {
             request.setPath(config.getHomePagePath());
         }
-        ServerContext context = contextFactory.apply(request);
-        if (request.getResourceType() == null) { // can be set by context factory
+    }
+
+    /**
+     * Assigns a resource type to the request.
+     *
+     * @param request the incoming request
+     */
+    private void assignResourceType(Request request) {
+        if (request.getResourceType() == null) {
             request.setResourceType(ResourceType.fromFileExtension(request.getPath()));
         }
+    }
+
+    /**
+     * Attempts to serve the request as a static resource.
+     *
+     * @param context the server context for this request
+     * @param request the incoming request 
+     * @return a response with the requested static resource
+     */
+    private Response tryServingStaticResource(ServerContext context, Request request) {
         if (!context.isApi() && request.isHttpGetForStaticResource() && context.isHttpGetAllowed()) {
-            if (request.getResourcePath() == null) { // can be set by context factory
-                request.setResourcePath(request.getPath()); // static resource
+            if (request.getResourcePath() == null) { 
+                request.setResourcePath(request.getPath());
             }
             try {
                 return response().buildStatic(request);
@@ -80,46 +111,87 @@ public class RequestHandler implements ServerHandler {
                 }
             }
         }
-        Session session = context.getSession(); // can be pre-resolved by context-factory
-        if (session == null && !context.isStateless()) {
-            String sessionId = context.getSessionCookieValue();
-            if (sessionId != null) {
-                session = sessionStore.get(sessionId);
-                if (session != null && isExpired(session)) {
-                    logger.debug("session expired: {}", session);
-                    sessionStore.delete(sessionId);
-                    session = null;
-                }
+
+        return null;
+    }
+
+    /**
+     * Resolves the session for a request, or returns a redirect response if no session is available 
+     *
+     * @param session the current session from the context
+     * @param context the server context
+     * @param request the incoming request
+     * @return a redirect response (302) if authentication is required, {@code null} otherwise
+     */
+    private Response resolveSessionOrRedirect(Session session, ServerContext context, Request request) {
+        String sessionId = context.getSessionCookieValue();
+        if (sessionId != null) {
+            session = sessionStore.get(sessionId);
+            if (session != null && isExpired(session)) {
+                logger.debug("session expired: {}", session);
+                sessionStore.delete(sessionId);
+                session = null;
             }
-            if (session == null) {
-                if (config.isUseGlobalSession()) {
-                    session = ServerConfig.GLOBAL_SESSION;
-                } else {
-                    if (config.isAutoCreateSession()) {
-                        context.init();
-                        session = context.getSession();
-                        logger.debug("auto-created session: {} - {}", request, session);
-                    } else if (config.getSigninPagePath().equals(request.getPath())
-                            || config.getSignoutPagePath().equals(request.getPath())) {
-                        session = Session.TEMPORARY;
-                        logger.debug("auth flow: {}", request);
-                    } else {
-                        logger.warn("session not found: {}", request);
-                        ResponseBuilder rb = response();
-                        if (sessionId != null) {
-                            rb.deleteSessionCookie(sessionId);
-                        }
-                        if (request.isAjax()) {
-                            rb.ajaxRedirect(signInPath());
-                        } else {
-                            rb.locationHeader(signInPath());
-                        }
-                        return rb.buildWithStatus(302);
-                    }
-                }
-            }
-            context.setSession(session);
         }
+        if (session == null) {
+            if (config.isUseGlobalSession()) {
+                session = ServerConfig.GLOBAL_SESSION;
+            } else {
+                if (config.isAutoCreateSession()) {
+                    context.init();
+                    session = context.getSession();
+                    logger.debug("auto-created session: {} - {}", request, session);
+                } else if (config.getSigninPagePath().equals(request.getPath())
+                        || config.getSignoutPagePath().equals(request.getPath())) {
+                    session = Session.TEMPORARY;
+                    logger.debug("auth flow: {}", request);
+                } else {
+                    logger.warn("session not found: {}", request);
+                    ResponseBuilder rb = response();
+                    if (sessionId != null) {
+                        rb.deleteSessionCookie(sessionId);
+                    }
+                    if (request.isAjax()) {
+                        rb.ajaxRedirect(signInPath());
+                    } else {
+                        rb.locationHeader(signInPath());
+                    }
+                    return rb.buildWithStatus(302);
+                }
+            }
+        }
+        context.setSession(session);
+        return null;
+    }
+
+    /**
+     * Handles an incoming HTTP request and produces a Response.
+     *
+     * @param request the incoming request
+     * @return the HTTP response
+     */
+    @Override
+    public Response handle(Request request) {
+        stripContextPath(request);
+        resolveHomePage(request);
+
+        ServerContext context = contextFactory.apply(request);
+        assignResourceType(request);
+
+        Response staticResponse = tryServingStaticResource(context, request);
+        if (staticResponse != null) {
+            return staticResponse;
+        }
+
+        Session session = context.getSession();
+
+        if (session == null && !context.isStateless()) {
+            Response redirectResponse = resolveSessionOrRedirect(session, context, request);
+            if (redirectResponse != null) {
+                return redirectResponse;
+            }
+        }
+
         RequestCycle rc = RequestCycle.init(templateEngine, context);
         return rc.handle();
     }
