@@ -71,4 +71,108 @@ class RequestHandlerTest {
         assertTrue(body.contains("<span>John</span>"));
     }
 
+    // ---------- Additional tests to improve branch coverage of handle() ----------
+
+    /**
+     * Covers the branch where {@code stripHostContextPath} is not null and the request path starts with that prefix.
+     */
+    @Test
+    void handle_testStripHostContextPathNotNull() {
+        ServerConfig config = new ServerConfig("test");
+        config.stripContextPathFromRequest(true);
+        config = config.hostContextPath("context");
+        handler = new RequestHandler(config);
+        request.path("context/path");
+        Response res = handle();
+        
+        assertNotNull(res);
+    }
+    
+    /**
+     * Covers the branch where {@code stripHostContextPath} is not null but the request path does not start with that prefix.
+     */
+    @Test
+    void handle_testPathDoesNotStartWithHostContextPath() {
+        ServerConfig config = new ServerConfig("test");
+        config.stripContextPathFromRequest(true);
+        config = config.hostContextPath("context");
+        handler = new RequestHandler(config);
+        request.path("path/context");
+        Response res = handle();
+        
+        assertNotNull(res);
+    }
+
+    /**
+     * Covers the branch where no session exists and {@code useGlobalSession} is enabled.
+     */
+    @Test
+    void handle_testUseGlobalSessionTrue() {
+        ServerConfig config = new ServerConfig("test");
+        config.useGlobalSession(true);
+        handler = new RequestHandler(config);
+        request.path("path/context");
+        Response res = handle();
+
+        assertNotNull(res);
+    }
+
+    /**
+     * Covers the branch where no session exists, {@code autoCreateSession} is disabled, and the request path matches the sign-in path.
+     */
+    @Test
+    void handle_SigninPathEqualsRequestPath() {
+        ServerConfig config = new ServerConfig("test");
+        config.useGlobalSession(false);
+        config.autoCreateSession(false);
+        config.signinPagePath("/signin");
+        config.signoutPagePath("/signout");
+
+        RequestHandler handler = new RequestHandler(config);
+
+        HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/signin").method("GET");
+        Response res = handler.handle(rb.build().toRequest());
+
+        assertNotNull(res);
+    }
+
+    /**
+     * Covers the branch where no session exists, {@code autoCreateSession} is disabled, and the request path matches the sign-out path.
+     */
+    @Test
+    void handle_SignoutPathEqualsRequestPath() {
+        ServerConfig config = new ServerConfig("test");
+        config.useGlobalSession(false);
+        config.autoCreateSession(false);
+        config.signinPagePath("/signin");
+        config.signoutPagePath("/signout");
+
+        RequestHandler handler = new RequestHandler(config);
+
+        HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/signout").method("GET");
+        Response res = handler.handle(rb.build().toRequest());
+
+        assertNotNull(res);
+    }
+
+    /**
+     * Covers the branch where no session exists, {@code autoCreateSession} is disabled, and the request path matches neither sign-in nor sign-out paths.
+     */
+    @Test
+    void handle_neitherSigninNorSignoutPathEqualsRequestPath() {
+        ServerConfig config = new ServerConfig("test");
+        config.useGlobalSession(false);
+        config.autoCreateSession(false);
+
+        config.signinPagePath("/signin");
+        config.signoutPagePath("/signout");
+
+        RequestHandler handler = new RequestHandler(config);
+
+        HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/other").method("GET");
+        Response res = handler.handle(rb.build().toRequest());
+
+        assertNotNull(res);
+    }
+
 }
