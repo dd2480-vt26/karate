@@ -87,8 +87,15 @@ class RequestHandlerTest {
         HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/context/index").method("GET");
         response = handler.handle(rb.build().toRequest());
 
+        // If the context path was stripped correctly, the handler should find the "/index" page
+        // and return a successful response
         assertEquals(200, response.getStatus());
+
+        // "/index" should be an HTML page
         matchHeaderEquals("Content-Type", "text/html");
+
+        // The response body should contain HTML content
+        // Verifies that the stripped path mapped to a valid resource
         assertTrue(response.getBodyAsString().startsWith("<!doctype html>"));
     }
     
@@ -106,7 +113,8 @@ class RequestHandlerTest {
         HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/other/index").method("GET");
         Response res = handler.handle(rb.build().toRequest());
 
-        assertNotEquals(200, res.getStatus()); // The server shouldn't be able to find the resource
+        // The server shouldn't be able to find the resource
+        assertNotEquals(200, res.getStatus());
     }
 
     /**
@@ -122,8 +130,15 @@ class RequestHandlerTest {
         HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/index").method("GET");
         Response res = handler.handle(rb.build().toRequest());
 
+        // With global session enabled, the handler should allow the request to proceed
+        // instead of redirecting due to a missing session
         assertEquals(200, res.getStatus());
+        
+        // Confirms that the handler didn't redirect by checking the Location header
         assertNull(res.getHeader("Location"));
+
+        // The response body should contain HTML content
+        // Verifies that the stripped path mapped to a valid resource
         assertTrue(res.getBodyAsString().startsWith("<!doctype html>"));
     }
 
@@ -142,6 +157,8 @@ class RequestHandlerTest {
         HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/signin").method("GET");
         Response res = handler.handle(rb.build().toRequest());
 
+        // When the user requests the sign-in page, the handler should not redirect them to sign-in again.
+        // We verify that the response status is not 302 (redirect)
         assertNotEquals(302, res.getStatus());
     }
 
@@ -160,6 +177,8 @@ class RequestHandlerTest {
         HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/signout").method("GET");
         Response res = handler.handle(rb.build().toRequest());
 
+        // When the user requests the sign-out page, the handler should not redirect them to sign-in.
+        // We verify that the response status is not 302 (redirect)
         assertNotEquals(302, res.getStatus());
     }
 
@@ -178,8 +197,12 @@ class RequestHandlerTest {
         HttpRequestBuilder rb = new HttpRequestBuilder(null).url("/other").method("GET");
         Response res = handler.handle(rb.build().toRequest());
 
+        // Requests to any other pages than /signin or /signout without a valid session
+        // should be redirected to the sign-in page
+        // We verify that a redirect has occured
         assertEquals(302, res.getStatus());
-        assertNotNull(res.getHeader("Location"));
+
+        // Verify redirection to /signin
         assertTrue(res.getHeader("Location").contains("/signin"));
     }
 
