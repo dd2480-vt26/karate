@@ -125,7 +125,20 @@ public class MultiPartBuilder {
             throw new RuntimeException(e);
         }
     }
-
+    
+    /**
+     * R1: If {@code value} is a list of elems and we use multipart, then
+     *   the body should consist of repeated parts with the same name.
+     * 
+     * R2: If the content-type is defined when using multipart, then
+     *   it should be used in the body header.
+     * 
+     * R3: If the content-type is invalid when using multipart, then
+     *   the content-type in the header should still be set to that value.
+     * 
+     * R4: If the value is null and we're not using multipart, then
+     *   the body should be empty (i.e., the empty string).
+    */
     public MultiPartBuilder part(Map<String, Object> map) {
         String name = (String) map.get("name");
         Object value = map.get("value");
