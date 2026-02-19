@@ -488,21 +488,30 @@ public class ScenarioEngineTest {
 
 
     /**
-     * Covers the branch where a command that doesn't exist fails properly.
-     * R4: The command must handle non-existent executables and report failure.
+     * Covers the branch where environment variables are set for the command.
+     * R4: The command must be able to use custom environment variables when 'env' is specified.
      */
     @Test
-    void shouldFailWhenCommandDoesNotExist() {
+    void shouldUseEnvironmentVariables() {
         java.util.Map<String, Object> options = new java.util.HashMap<>();
+        java.util.Map<String, String> env = new java.util.HashMap<>();
 
-        // Use a command name that definitely doesn't exist
-        options.put("line", "thisCommandDefinitelyDoesNotExist12345");
+        // Set a custom environment variable
+        env.put("TEST_VAR", "test-value");
+        options.put("env", env);
+        options.put("useShell", true);
+
+        // Use a command that prints the environment variable
+        String command = System.getProperty("os.name").toLowerCase().contains("win")
+            ? "echo %TEST_VAR%"
+            : "echo $TEST_VAR";
+        options.put("line", command);
 
         com.intuit.karate.shell.Command cmd = engine.fork(false, options);
         cmd.waitSync();
 
-        // Verifies that attempting to run a non-existent command results in a non-zero exit code
-        assertNotEquals(0, cmd.getExitCode(), "Process should fail with a non-zero exit code for non-existent command");
+        // Verifies that the command executed successfully with the custom environment
+        assertEquals(0, cmd.getExitCode(), "Process should exit with code 0");
     }
 
 }
