@@ -867,47 +867,93 @@ public class ScenarioEngine {
     public Command fork(boolean useLineFeed, Map<String, Object> options) {
         Boolean useShell = (Boolean) options.get("useShell");
         if (useShell == null) {
+            DIYCoverageTracker.branches[0] = true;
             useShell = false;
+        }
+        else {
+            DIYCoverageTracker.branches[1] = true;
         }
         List<String> list = (List) options.get("args");
         String[] args;
         if (list == null) {
+            DIYCoverageTracker.branches[2] = true;
             String line = (String) options.get("line");
             if (line == null) {
+                DIYCoverageTracker.branches[3] = true;
                 throw new RuntimeException("'line' or 'args' is required");
+            }
+            else {
+                DIYCoverageTracker.branches[4] = true;
             }
             args = Command.tokenize(line);
         } else {
+            DIYCoverageTracker.branches[5] = true;
             args = list.toArray(new String[list.size()]);
         }
         if (useShell) {
+            DIYCoverageTracker.branches[6] = true;
             args = Command.prefixShellArgs(args);
         }
+        else {
+            DIYCoverageTracker.branches[7] = true;
+        }
         String workingDir = (String) options.get("workingDir");
-        File workingFile = workingDir == null ? null : new File(workingDir);
+        File workingFile;
+        if (workingDir == null) {
+            DIYCoverageTracker.branches[8] = true;
+            workingFile = null;
+        }
+        else {
+            DIYCoverageTracker.branches[9] = true;
+            workingFile = new File(workingDir);
+        }
         Command command = new Command(useLineFeed, logger, null, null, workingFile, args);
         Map env = (Map) options.get("env");
         if (env != null) {
+            DIYCoverageTracker.branches[10] = true;
             command.setEnvironment(env);
+        }
+        else {
+            DIYCoverageTracker.branches[11] = true;
         }
         Boolean redirectErrorStream = (Boolean) options.get("redirectErrorStream");
         if (redirectErrorStream != null) {
+            DIYCoverageTracker.branches[12] = true;
             command.setRedirectErrorStream(redirectErrorStream);
+        }
+        else {
+            DIYCoverageTracker.branches[13] = true;
         }
         Value funOut = Value.asValue(options.get("listener"));
         if (funOut.canExecute()) {
+            DIYCoverageTracker.branches[14] = true;
             command.setListener(new JsLambda(funOut));
+        }
+        else {
+            DIYCoverageTracker.branches[15] = true;
         }
         Value funErr = Value.asValue(options.get("errorListener"));
         if (funErr.canExecute()) {
+            DIYCoverageTracker.branches[16] = true;
             command.setErrorListener(new JsLambda(funErr));
+        }
+        else {
+            DIYCoverageTracker.branches[17] = true;
         }
         Boolean start = (Boolean) options.get("start");
         if (start == null) {
+            DIYCoverageTracker.branches[18] = true;
             start = true;
         }
+        else {
+            DIYCoverageTracker.branches[19] = true;
+        }
         if (start) {
+            DIYCoverageTracker.branches[20] = true;
             command.start();
+        }
+        else {
+            DIYCoverageTracker.branches[21] = true;
         }
         return command;
     }
