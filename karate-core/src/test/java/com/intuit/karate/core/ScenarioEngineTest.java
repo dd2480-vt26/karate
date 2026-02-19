@@ -422,4 +422,87 @@ public class ScenarioEngineTest {
         matchEquals("str", "'ha bar ha'");
     }
 
+    // ---------- Additional tests to improve branch coverage of fork() ----------
+
+    // Examples of untested requirements for the fork() function:
+    // R1: The command must execute correctly when provided via the 'line' option.
+    // R2: The command must execute correctly when provided via an 'args' list.
+    // R3: The command must execute in a system shell if 'useShell: true' is specified.
+    // R4: The command must respect a specific exit code.
+
+    /**
+     * Covers the branch where the command is provided by the 'line' option.
+     * R1: The command must execute correctly when provided via the 'line' option.
+     */
+    @Test
+    void shouldExecuteCommandFromLine() {
+        java.util.Map<String, Object> options = new java.util.HashMap<>();
+        options.put("line", "java -version");
+
+        com.intuit.karate.shell.Command cmd = engine.fork(false, options);
+        cmd.waitSync();
+
+        assertEquals(0, cmd.getExitCode(), "Process should exit with code 0");
+    }
+
+    /**
+     * Covers the branch where the command is provided by an 'args' list.
+     * R2: The command must execute correctly when provided via an 'args' list.
+     */
+    @Test
+    void shouldExecuteCommandFromArgs() {
+        java.util.Map<String, Object> options = new java.util.HashMap<>();
+        java.util.List<String> args = new java.util.ArrayList<>();
+        args.add("java");
+        args.add("-version");
+        options.put("args", args);
+
+        com.intuit.karate.shell.Command cmd = engine.fork(false, options);
+        cmd.waitSync();
+
+        assertEquals(0, cmd.getExitCode(), "Process should exit with code 0");
+    }
+
+    /**
+     * Covers the branch where 'useShell: true' is enabled by verifying a side-effect.
+     * R3: The command must execute in a system shell if 'useShell: true' is specified.
+     */
+    @Test
+    void shouldUseShellWhenSpecified() {
+        java.io.File testFile = new java.io.File("target/shell-test.txt");
+        testFile.delete();
+
+        java.util.Map<String, Object> options = new java.util.HashMap<>();
+        options.put("useShell", true);
+        options.put("line", "echo shell-works > target/shell-test.txt");
+
+        com.intuit.karate.shell.Command cmd = engine.fork(false, options);
+        cmd.waitSync();
+
+        assertEquals(0, cmd.getExitCode(), "Process should exit with code 0");
+        // Verifies that the shell's redirection feature worked, proving it was used.
+        assertTrue(testFile.exists(), "The file should have been created by the shell");
+
+        testFile.delete();
+    }
+
+
+    /**
+     * Covers the branch where a command that doesn't exist fails properly.
+     * R4: The command must handle non-existent executables and report failure.
+     */
+    @Test
+    void shouldFailWhenCommandDoesNotExist() {
+        java.util.Map<String, Object> options = new java.util.HashMap<>();
+
+        // Use a command name that definitely doesn't exist
+        options.put("line", "thisCommandDefinitelyDoesNotExist12345");
+
+        com.intuit.karate.shell.Command cmd = engine.fork(false, options);
+        cmd.waitSync();
+
+        // Verifies that attempting to run a non-existent command results in a non-zero exit code
+        assertNotEquals(0, cmd.getExitCode(), "Process should fail with a non-zero exit code for non-existent command");
+    }
+
 }
