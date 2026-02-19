@@ -8,7 +8,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.junit.jupiter.api.AfterAll; // To make sure it runs after the tests
 
 /**
  *
@@ -39,14 +38,6 @@ class MockHandlerTest {
         response = handler.handle(request.build().toRequest());
         request = new HttpRequestBuilder(client).method("GET");
         return response;
-    }
-    
-    /**
-     * This runs at the end to see the report of the DIY branch coverage tool
-     */
-    @AfterAll
-    static void tearDownAll() {
-        DIYCoverageTracker.reportCoverage();
     }
 
     @Test
@@ -326,6 +317,74 @@ class MockHandlerTest {
                 .contentType("application/xml");
         handle();
         match(response.getBodyAsString(), "NULL");        
+    }
+    
+    /**
+     * Covers the branch where it is suposed to handle {@code OPTIONS request} when {@code CORS} is enabled.
+     */
+    @Test
+    void testCorsOptionsSuccess() {
+        background(
+                "configure cors = true"
+        ).scenario(
+                "pathMatches('/hello')",
+                "def response = 'cors test'"
+        );
+        request.path("/hello").method("OPTIONS");
+        handle();
+        match(response.getStatus(), 200);
+        match(response.getHeader("Access-Control-Allow-Origin"), "*");
+    }
+
+    /**
+     * Covers the branch where it is suposed to handle {@code OPTIONS request} when {@code CORS} is enabled and {@code requestHeaders} is not null.
+     */
+    @Test
+    void testCorsOptionsSuccessWithRequestHeaders() {
+        background(
+                "configure cors = true"
+        ).scenario(
+                "pathMatches('/hello')",
+                "def response = 'ok'"
+        );
+        request.path("/hello")
+                .method("OPTIONS")
+                .header("Access-Control-Request-Headers", "X-Test");
+
+        handle();
+        match(response.getStatus(), 200);
+        match(response.getHeader("Access-Control-Allow-Origin"), "*");
+        match(response.getHeader("Access-Control-Allow-Headers"), "X-Test");
+    }
+
+    /**
+     * Covers the branch where {@code Scenario} fails.
+     */
+    @Test
+    void testScenarioFailureReturns500() {
+        background().scenario(
+                "pathMatches('/hello')",
+                "assert false"
+        );
+        request.path("/hello");
+        handle();
+        match(response.getStatus(), 500);
+    }
+    
+    /**
+     * Covers the branch where {@code responseDelay} is not null.
+     */
+    @Test
+    void testResponseDelay() {
+        background().scenario(
+                "pathMatches('/helo')",
+                "def response = 'delayed'",
+                "def responseStatus = 200",
+                "def responseDelay = 100"
+        );
+        request.path("/helo");
+        handle();
+        match(response.getStatus(), 200);
     }    
 
 }

@@ -155,35 +155,24 @@ public class MockHandler implements ServerHandler {
 
     @Override
     public synchronized Response handle(Request req) { // note the [synchronized]
-        DIYCoverageTracker.branches[0] = true; // Method entered
         if (corsEnabled && "OPTIONS".equals(req.getMethod())) {
-            DIYCoverageTracker.branches[1] = true; // corsEnabled && "OPTIONS".equals(req.getMethod()) is true
             Response response = new Response(200);
             response.setHeader("Allow", ALLOWED_METHODS);
             response.setHeader("Access-Control-Allow-Origin", "*");
             response.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS);
             List<String> requestHeaders = req.getHeaderValues("Access-Control-Request-Headers");
             if (requestHeaders != null) {
-                DIYCoverageTracker.branches[2] = true; // requestHeaders != null is true
                 response.setHeader("Access-Control-Allow-Headers", requestHeaders);
-            } else {
-                DIYCoverageTracker.branches[3] = true; // requestHeaders != null is true, else branch
             }
             return response;
-        } else {
-            DIYCoverageTracker.branches[4] = true; // corsEnabled && "OPTIONS".equals(req.getMethod()) is true, else branch
         }
         if (prefix != null && req.getPath().startsWith(prefix)) {
-            DIYCoverageTracker.branches[5] = true; // prefix != null && req.getPath().startsWith(prefix) is true
             req.setPath(req.getPath().substring(prefix.length()));
-        } else {
-            DIYCoverageTracker.branches[6] = true; // prefix != null && req.getPath().startsWith(prefix) is true, else branch
         }
         // rare case when http-client is active within same jvm
         // snapshot existing thread-local to restore
         ScenarioEngine prevEngine = ScenarioEngine.get();
         for (Map.Entry<Feature, ScenarioRuntime> entry : scenarioRuntimes.entrySet()) {
-            DIYCoverageTracker.branches[7] = true; // For loop 1
             Feature feature = entry.getKey();
             ScenarioRuntime runtime = entry.getValue();
             // important for graal to work properly
@@ -192,17 +181,12 @@ public class MockHandler implements ServerHandler {
             req.processBody();
             ScenarioEngine engine = initEngine(runtime, globals, req);
             for (FeatureSection fs : feature.getSections()) {
-                DIYCoverageTracker.branches[8] = true; // Foor loop 1.2
                 if (fs.isOutline()) {
-                    DIYCoverageTracker.branches[9] = true; // fs.isOutline() is true
                     runtime.logger.warn("skipping scenario outline - {}:{}", feature, fs.getScenarioOutline().getLine());
                     break;
-                } else {
-                    DIYCoverageTracker.branches[10] = true; // fs.isOutline() is true, else branch
                 }
                 Scenario scenario = fs.getScenario();
                 if (isMatchingScenario(scenario, engine)) {
-                    DIYCoverageTracker.branches[11] = true; // isMatchingScenario(scenario, engine) is true
                     Map<String, Object> configureHeaders;
                     Variable response, responseStatus, responseHeaders, responseDelay;
                     ScenarioActions actions = new ScenarioActions(engine);
@@ -216,79 +200,45 @@ public class MockHandler implements ServerHandler {
                     globals.putAll(engine.shallowCloneVariables());
                     Response res = new Response(200);
                     if (result.isFailed()) {
-                        DIYCoverageTracker.branches[12] = true; // result.isFailed() is true
                         response = new Variable(result.getError().getMessage());
                         responseStatus = new Variable(500);
                     } else {
-                        DIYCoverageTracker.branches[13] = true; // result.isFailed() is true, else branch
                         if (corsEnabled) {
-                            DIYCoverageTracker.branches[14] = true; // corsEnabled is true
                             res.setHeader("Access-Control-Allow-Origin", "*");
-                        } else {
-                            DIYCoverageTracker.branches[15] = true; // corsEnabled is true, else branch
                         }
                         res.setHeaders(configureHeaders);
                         if (responseHeaders != null && responseHeaders.isMap()) {
-                            DIYCoverageTracker.branches[16] = true; // responseHeaders != null && responseHeaders.isMap() is true
                             res.setHeaders(responseHeaders.getValue());
-                        } else {
-                            DIYCoverageTracker.branches[17] = true; // responseHeaders != null && responseHeaders.isMap() is true, else branch
                         }
                         if (responseDelay != null) {
-                            DIYCoverageTracker.branches[18] = true; // responseDelay != null is true
                             res.setDelay(responseDelay.getAsInt());
-                        } else {
-                            DIYCoverageTracker.branches[19] = true; // responseDelay != null is true, else branch
                         }
                     }
                     if (response != null && !response.isNull()) {
-                        DIYCoverageTracker.branches[20] = true; // response != null && !response.isNull() is true
                         res.setBody(response.getAsByteArray());
                         if (res.getContentType() == null) {
-                            DIYCoverageTracker.branches[21] = true; // res.getContentType() == null is true
                             ResourceType rt = ResourceType.fromObject(response.getValue());
                             if (rt != null) {
-                                DIYCoverageTracker.branches[22] = true; // rt != null is true
                                 res.setContentType(rt.contentType);
-                            } else {
-                                DIYCoverageTracker.branches[23] = true; // rt != null is true, else branch
                             }
-                        } else {
-                            DIYCoverageTracker.branches[24] = true; // res.getContentType() == null is true, else branch
                         }
-                    } else {
-                        DIYCoverageTracker.branches[25] = true; // response != null && !response.isNull() is true, else branch
                     }
                     if (responseStatus != null) {
-                        DIYCoverageTracker.branches[26] = true; // responseStatus != null is true
                         res.setStatus(responseStatus.getAsInt());
-                    } else {
-                        DIYCoverageTracker.branches[27] = true; // responseStatus != null is true, else branch
                     }
                     if (prevEngine != null) {
-                        DIYCoverageTracker.branches[28] = true; // prevEngine != null is true
                         ScenarioEngine.set(prevEngine);
-                    } else {
-                        DIYCoverageTracker.branches[29] = true; // prevEngine != null is true, else branch
                     }
                     if (mockInterceptor != null) {
-                        DIYCoverageTracker.branches[30] = true; // mockInterceptor != null is true
                         mockInterceptor.intercept(req, res, scenario);
-                    } else {
-                        DIYCoverageTracker.branches[31] = true; // mockInterceptor != null is true, else branch
                     }
                     return res;
-                } else {
-                    DIYCoverageTracker.branches[32] = true; // isMatchingScenario(scenario, engine) is true, else branch
                 }
             }
         }
         logger.warn("no scenarios matched, returning 404: {}", req); // NOTE: not logging with engine.logger
         if (prevEngine != null) {
-            DIYCoverageTracker.branches[33] = true; // prevEngine != null is true
             ScenarioEngine.set(prevEngine);
-        } else {
-            DIYCoverageTracker.branches[34] = true; // prevEngine != null is true, else branch
         }
         return new Response(404);
     }
