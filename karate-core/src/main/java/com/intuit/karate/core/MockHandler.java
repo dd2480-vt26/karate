@@ -154,10 +154,10 @@ public class MockHandler implements ServerHandler {
     private static final String ALLOWED_METHODS = "GET, HEAD, POST, PUT, DELETE, PATCH";
 
     /**
-     * Handles CORS preflight (OPTIONS) requests if CORS is enabled
+     * Handles CORS (OPTIONS) requests if CORS is enabled
      *
      * @param req the incoming HTTP request
-     * @return a CORS response if applicable, otherwise {@code null}
+     * @return a CORS response if applicable, otherwise null
      */
     private Response handleCors(Request req) {
         if (!corsEnabled || !"OPTIONS".equals(req.getMethod())) {
@@ -186,15 +186,15 @@ public class MockHandler implements ServerHandler {
     }
 
     /**
-     * Returns a response that encapsulates the context of a successfully matched scenario.
+     * Returns a response that encapsulates the context of a successfully matched scenario
      *
-     * @param feature a {@code Feature} instance
-     * @param runtime a {@code ScenarioRuntime} instance
-     * @param scenario a {@code Scenario} instance
-     * @param engine a {@code ScenarioEngine} instance
-     * @param prevEngine a {@code ScenarioEngine} instance
+     * @param feature the {@code Feature} containing the matched scenario
+     * @param runtime the {@code ScenarioRuntime} associated with the feature
+     * @param scenario the matched {@code Scenario} to execute
+     * @param engine the active {@code ScenarioEngine} initialized for this request
+     * @param prevEngine the previously active {@code ScenarioEngine}
      * @param req the incoming HTTP request
-     * @return a response
+     * @return the constructed HTTP {@code Response}
      */
     private Response handleScenario(Feature feature, ScenarioRuntime runtime, Scenario scenario, ScenarioEngine engine, ScenarioEngine prevEngine, Request req){
         Map<String, Object> configureHeaders;
@@ -246,9 +246,10 @@ public class MockHandler implements ServerHandler {
     }
 
     /**
-     * Returns a response that encapsulates the context of a successfully matched scenario.
+     * Returns a response that and logs a warning if there is no matching senario
      *
-     * @param prevEngine a {@code ScenarioEngine} instance
+     * @param prevEngine the previously active {@code ScenarioEngine}
+     * @param req the incoming HTTP request
      * @return a response
      */
     private Response handleNoMatch(ScenarioEngine prevEngine, Request req ) {
