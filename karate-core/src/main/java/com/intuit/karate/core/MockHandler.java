@@ -153,25 +153,126 @@ public class MockHandler implements ServerHandler {
     private static final Result PASSED = Result.passed(0, 0);
     private static final String ALLOWED_METHODS = "GET, HEAD, POST, PUT, DELETE, PATCH";
 
-    @Override
-    public synchronized Response handle(Request req) { // note the [synchronized]
-        if (corsEnabled && "OPTIONS".equals(req.getMethod())) {
-            Response response = new Response(200);
-            response.setHeader("Allow", ALLOWED_METHODS);
-            response.setHeader("Access-Control-Allow-Origin", "*");
-            response.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS);
-            List<String> requestHeaders = req.getHeaderValues("Access-Control-Request-Headers");
-            if (requestHeaders != null) {
-                response.setHeader("Access-Control-Allow-Headers", requestHeaders);
-            }
-            return response;
+    /**
+     * Handles CORS preflight (OPTIONS) requests if CORS is enabled
+     *
+     * @param req the incoming HTTP request
+     * @return a CORS response if applicable, otherwise {@code null}
+     */
+    private Response handleCors(Request req) {
+        if (!corsEnabled || !"OPTIONS".equals(req.getMethod())) {
+            return null;
         }
+        Response response = new Response(200);
+        response.setHeader("Allow", ALLOWED_METHODS);
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS);
+        List<String> requestHeaders = req.getHeaderValues("Access-Control-Request-Headers");
+        if (requestHeaders != null) {
+            response.setHeader("Access-Control-Allow-Headers", requestHeaders);
+        }
+        return response;
+    }
+
+    /**
+     * Removes the configured URL prefix from the request path if present
+     *
+     * @param req the incoming HTTP request
+     */
+    private void handlePrefix(Request req) {
         if (prefix != null && req.getPath().startsWith(prefix)) {
             req.setPath(req.getPath().substring(prefix.length()));
         }
+    }
+
+    /**
+     * Returns a response that encapsulates the context of a successfully matched scenario.
+     *
+     * @param feature a {@code Feature} instance
+     * @param runtime a {@code ScenarioRuntime} instance
+     * @param scenario a {@code Scenario} instance
+     * @param engine a {@code ScenarioEngine} instance
+     * @param prevEngine a {@code ScenarioEngine} instance
+     * @param req the incoming HTTP request
+     * @return a response
+     */
+    private Response handleScenario(Feature feature, ScenarioRuntime runtime, Scenario scenario, ScenarioEngine engine, ScenarioEngine prevEngine, Request req){
+        Map<String, Object> configureHeaders;
+        Variable response, responseStatus, responseHeaders, responseDelay;
+        ScenarioActions actions = new ScenarioActions(engine);
+        Result result = executeScenarioSteps(feature, runtime, scenario, actions);
+        engine.mockAfterScenario();
+        configureHeaders = engine.mockConfigureHeaders();
+        response = engine.vars.remove(ScenarioEngine.RESPONSE);
+        responseStatus = engine.vars.remove(ScenarioEngine.RESPONSE_STATUS);
+        responseHeaders = engine.vars.remove(ScenarioEngine.RESPONSE_HEADERS);
+        responseDelay = engine.vars.remove(RESPONSE_DELAY);
+        globals.putAll(engine.shallowCloneVariables());
+        Response res = new Response(200);
+        if (result.isFailed()) {
+            response = new Variable(result.getError().getMessage());
+            responseStatus = new Variable(500);
+        } else {
+            if (corsEnabled) {
+                res.setHeader("Access-Control-Allow-Origin", "*");
+            }
+            res.setHeaders(configureHeaders);
+            if (responseHeaders != null && responseHeaders.isMap()) {
+                res.setHeaders(responseHeaders.getValue());
+            }
+            if (responseDelay != null) {
+                res.setDelay(responseDelay.getAsInt());
+            }
+        }
+        if (response != null && !response.isNull()) {
+            res.setBody(response.getAsByteArray());
+            if (res.getContentType() == null) {
+                ResourceType rt = ResourceType.fromObject(response.getValue());
+                if (rt != null) {
+                    res.setContentType(rt.contentType);
+                }
+            }
+        }
+        if (responseStatus != null) {
+            res.setStatus(responseStatus.getAsInt());
+        }
+        if (prevEngine != null) {
+            ScenarioEngine.set(prevEngine);
+        }
+        if (mockInterceptor != null) {
+            mockInterceptor.intercept(req, res, scenario);
+        }
+        return res;
+    }
+
+    /**
+     * Returns a response that encapsulates the context of a successfully matched scenario.
+     *
+     * @param prevEngine a {@code ScenarioEngine} instance
+     * @return a response
+     */
+    private Response handleNoMatch(ScenarioEngine prevEngine, Request req ) {
+        logger.warn("no scenarios matched, returning 404: {}", req); // NOTE: not logging with engine.logger
+        if (prevEngine != null) {
+            ScenarioEngine.set(prevEngine);
+        }
+        return new Response(404);
+
+    }
+
+    @Override
+    public synchronized Response handle(Request req) { // note the [synchronized]
+
+        Response cors = handleCors(req);
+        if (cors != null) {
+            return cors;
+        }
+        handlePrefix(req);
+
         // rare case when http-client is active within same jvm
         // snapshot existing thread-local to restore
         ScenarioEngine prevEngine = ScenarioEngine.get();
+
         for (Map.Entry<Feature, ScenarioRuntime> entry : scenarioRuntimes.entrySet()) {
             Feature feature = entry.getKey();
             ScenarioRuntime runtime = entry.getValue();
@@ -187,60 +288,13 @@ public class MockHandler implements ServerHandler {
                 }
                 Scenario scenario = fs.getScenario();
                 if (isMatchingScenario(scenario, engine)) {
-                    Map<String, Object> configureHeaders;
-                    Variable response, responseStatus, responseHeaders, responseDelay;
-                    ScenarioActions actions = new ScenarioActions(engine);
-                    Result result = executeScenarioSteps(feature, runtime, scenario, actions);
-                    engine.mockAfterScenario();
-                    configureHeaders = engine.mockConfigureHeaders();
-                    response = engine.vars.remove(ScenarioEngine.RESPONSE);
-                    responseStatus = engine.vars.remove(ScenarioEngine.RESPONSE_STATUS);
-                    responseHeaders = engine.vars.remove(ScenarioEngine.RESPONSE_HEADERS);
-                    responseDelay = engine.vars.remove(RESPONSE_DELAY);
-                    globals.putAll(engine.shallowCloneVariables());
-                    Response res = new Response(200);
-                    if (result.isFailed()) {
-                        response = new Variable(result.getError().getMessage());
-                        responseStatus = new Variable(500);
-                    } else {
-                        if (corsEnabled) {
-                            res.setHeader("Access-Control-Allow-Origin", "*");
-                        }
-                        res.setHeaders(configureHeaders);
-                        if (responseHeaders != null && responseHeaders.isMap()) {
-                            res.setHeaders(responseHeaders.getValue());
-                        }
-                        if (responseDelay != null) {
-                            res.setDelay(responseDelay.getAsInt());
-                        }
-                    }
-                    if (response != null && !response.isNull()) {
-                        res.setBody(response.getAsByteArray());
-                        if (res.getContentType() == null) {
-                            ResourceType rt = ResourceType.fromObject(response.getValue());
-                            if (rt != null) {
-                                res.setContentType(rt.contentType);
-                            }
-                        }
-                    }
-                    if (responseStatus != null) {
-                        res.setStatus(responseStatus.getAsInt());
-                    }
-                    if (prevEngine != null) {
-                        ScenarioEngine.set(prevEngine);
-                    }
-                    if (mockInterceptor != null) {
-                        mockInterceptor.intercept(req, res, scenario);
-                    }
+                    Response res = handleScenario(feature, runtime, scenario, engine, prevEngine, req);
                     return res;
                 }
             }
         }
-        logger.warn("no scenarios matched, returning 404: {}", req); // NOTE: not logging with engine.logger
-        if (prevEngine != null) {
-            ScenarioEngine.set(prevEngine);
-        }
-        return new Response(404);
+        Response noMatch = handleNoMatch(prevEngine, req);
+        return noMatch;
     }
     
     private static ScenarioEngine initEngine(ScenarioRuntime runtime, Map<String, Variable> globals, Request req) {
