@@ -864,13 +864,31 @@ public class ScenarioEngine {
         return fork(useLineFeed, Collections.singletonMap("line", line));
     }
 
+
     public Command fork(boolean useLineFeed, Map<String, Object> options) {
+        boolean useShell = determineUseShell(options);
+        String[] args = resolveCommandArguments(options, useShell);
+        File workingFile = resolveWorkingDirectory(options);
+
+        Command command = new Command(useLineFeed, logger, null, null, workingFile, args);
+
+        configureEnvironment(command, options);
+        configureStreams(command, options);
+        configureListeners(command, options);
+        startCommandIfNeeded(command, options);
+
+        return command;
+    }
+
+    private boolean determineUseShell(Map<String, Object> options) {
         Boolean useShell = (Boolean) options.get("useShell");
-        if (useShell == null) {
-            useShell = false;
-        }
+        return useShell != null ? useShell : false;
+    }
+
+    private String[] resolveCommandArguments(Map<String, Object> options, boolean useShell) {
         List<String> list = (List) options.get("args");
         String[] args;
+
         if (list == null) {
             String line = (String) options.get("line");
             if (line == null) {
@@ -880,37 +898,52 @@ public class ScenarioEngine {
         } else {
             args = list.toArray(new String[list.size()]);
         }
+
         if (useShell) {
             args = Command.prefixShellArgs(args);
         }
+
+        return args;
+    }
+
+    private File resolveWorkingDirectory(Map<String, Object> options) {
         String workingDir = (String) options.get("workingDir");
-        File workingFile = workingDir == null ? null : new File(workingDir);
-        Command command = new Command(useLineFeed, logger, null, null, workingFile, args);
+        return workingDir == null ? null : new File(workingDir);
+    }
+
+    private void configureEnvironment(Command command, Map<String, Object> options) {
         Map env = (Map) options.get("env");
         if (env != null) {
             command.setEnvironment(env);
         }
+    }
+
+    private void configureStreams(Command command, Map<String, Object> options) {
         Boolean redirectErrorStream = (Boolean) options.get("redirectErrorStream");
         if (redirectErrorStream != null) {
             command.setRedirectErrorStream(redirectErrorStream);
         }
+    }
+
+    private void configureListeners(Command command, Map<String, Object> options) {
         Value funOut = Value.asValue(options.get("listener"));
         if (funOut.canExecute()) {
             command.setListener(new JsLambda(funOut));
         }
+
         Value funErr = Value.asValue(options.get("errorListener"));
         if (funErr.canExecute()) {
             command.setErrorListener(new JsLambda(funErr));
         }
+    }
+
+    private void startCommandIfNeeded(Command command, Map<String, Object> options) {
         Boolean start = (Boolean) options.get("start");
-        if (start == null) {
-            start = true;
-        }
-        if (start) {
+        if (start == null || start) {
             command.start();
         }
-        return command;
     }
+
 
     // ui driver / robot =======================================================
     //
