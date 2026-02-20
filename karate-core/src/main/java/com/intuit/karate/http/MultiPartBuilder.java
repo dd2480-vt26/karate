@@ -129,86 +129,93 @@ public class MultiPartBuilder {
     public MultiPartBuilder part(Map<String, Object> map) {
         String name = (String) map.get("name");
         Object value = map.get("value");
+
         if (!multipart) {
-            List<String> list;
-            if (value instanceof List) {
-                list = (List) value;
-            } else {
-                if (value == null) {
-                    list = Collections.emptyList();
-                } else {
-                    list = Collections.singletonList(value.toString());
-                }
-            }
-            if (formFields == null) {
-                formFields = new HashMap();
-            }
-            for (String s : list) {
-                formFields.put(name, s);
-                try {
-                    encoder.addBodyAttribute(name, s);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+            handleUrlEncoded(name, value);
+        } else if (value instanceof File file) {
+            addFile(name, file, map);
+        } else if (value instanceof List<?> list) { // recurse, hope that adding to array of fields is supported
+            for (Object o : list) {
+                part(name, o);
             }
         } else {
-            if (value instanceof File) {
-                File file = (File) value;
-                addFile(name, file, map);
-            } else if (value instanceof List) { // recurse, hope that adding to array of fields is supported
-                List list = (List) value;
-                for (Object o : list) {
-                    Map<String, Object> temp = new HashMap();
-                    temp.put("name", name);
-                    temp.put("value", o);
-                    part(temp);
-                }
-            } else {
-                String contentType = (String) map.get("contentType");
-                ResourceType resourceType;
-                if (contentType == null) {
-                    resourceType = ResourceType.fromObject(value);
-                } else {
-                    resourceType = ResourceType.fromContentType(contentType);
-                }
-                if (resourceType == null) {
-                    resourceType = ResourceType.BINARY;
-                }
-                if (contentType == null) {
-                    contentType = resourceType.contentType;
-                }
-                Charset cs = null;
-                if (!resourceType.isBinary()) {
-                    String charset = (String) map.get("charset");
-                    if (charset == null && client != null && client.getConfig() != null) { // mock clients can have nulls
-                        cs = client.getConfig().getCharset();
-                    } else if (charset != null) {
-                        cs = Charset.forName(charset);
-                    }
-                }
-                byte[] encoded = value == null ? Constants.ZERO_BYTES : JsonUtils.toBytes(value);
-                String filename = (String) map.get("filename");
-                if (filename == null) {
-                    filename = ""; // will be treated as an inline value, behaves like null
-                }
-                String transferEncoding = (String) map.get("transferEncoding");
-                final Charset nullable = cs;
-                MemoryFileUpload item = new MemoryFileUpload(name, filename, contentType, transferEncoding, cs, encoded.length) {
-                    @Override
-                    public Charset getCharset() {
-                        return nullable; // workaround for netty api strictness
-                    }
-                };
-                try {
-                    item.setContent(Unpooled.wrappedBuffer(encoded));
-                    encoder.addBodyHttpData(item);
-                    logger.debug("multipart: {}", item);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+            addMultipartFields(map, name, value);
+        }
+        
+        return this;
+    }
+
+    private void handleUrlEncoded(String name, Object value) {
+        List<String> list = valueToList(value);
+        if (formFields == null) {
+            formFields = new HashMap<>();
+        }
+        for (String s : list) {
+            formFields.put(name, s);
+            try {
+                encoder.addBodyAttribute(name, s);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         }
-        return this;
+    }
+
+    private List<String> valueToList(Object value) {
+        if (value instanceof List) {
+            return (List<String>) value;
+        }
+        if (value == null) {
+            return Collections.emptyList();
+        }
+        return Collections.singletonList(value.toString());
+    }
+
+    private void addMultipartFields(Map<String, Object> map, String name, Object value) {
+        String contentType = (String) map.get("contentType");
+        ResourceType resourceType;
+        if (contentType == null) {
+            resourceType = ResourceType.fromObject(value);
+            contentType = resourceType.contentType;
+        } else {
+            resourceType = ResourceType.fromContentType(contentType);
+        }
+        if (resourceType == null) {
+            resourceType = ResourceType.BINARY;
+        }
+        Charset cs = resolveCharset(map, resourceType);
+        byte[] encoded = value == null ? Constants.ZERO_BYTES : JsonUtils.toBytes(value);
+
+        String filename = (String) map.getOrDefault("filename", "");        // "" will be treated as an inline value, behaves like null
+        String transferEncoding = (String) map.get("transferEncoding");
+        
+        final Charset nullable = cs;
+        MemoryFileUpload item = new MemoryFileUpload(name, filename, contentType, transferEncoding, cs, encoded.length) {
+            @Override
+            public Charset getCharset() {
+                return nullable; // workaround for netty api strictness
+            }
+        };
+        try {
+            item.setContent(Unpooled.wrappedBuffer(encoded));
+            encoder.addBodyHttpData(item);
+            logger.debug("multipart: {}", item);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Charset resolveCharset(Map<String, Object> map, ResourceType resourceType) {
+        if (resourceType == null || resourceType.isBinary()) {
+            return null;
+        }
+        String charset = (String) map.get("charset");
+        if (charset != null) {
+            return Charset.forName(charset);
+        }
+        if (client != null && client.getConfig() != null) { // mock clients can have nulls
+            return client.getConfig().getCharset();
+        }
+        return null;
     }
 
     public MultiPartBuilder part(String name, Object value) {
